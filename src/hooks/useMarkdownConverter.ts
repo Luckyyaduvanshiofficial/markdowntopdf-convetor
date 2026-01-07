@@ -212,74 +212,93 @@ ${previewElement.innerHTML}
       const [width, height] = pageSizes[settings.pageSize] || pageSizes.a4;
       const format: [number, number] = settings.orientation === "landscape" ? [height, width] : [width, height];
 
-      // Create a clone of the preview element for PDF generation with proper page break styles
-      const clonedElement = previewElement.cloneNode(true) as HTMLElement;
-      
-      // Add CSS to handle page breaks properly
-      const style = document.createElement("style");
-      style.textContent = `
-        * {
+      // Build a printable clone of the *preview wrapper* (not the flex container),
+      // otherwise `h-full` can collapse to 0 height and produce a blank PDF.
+      const previewWrapper = (previewElement.firstElementChild as HTMLElement | null) ?? previewElement;
+      const printableElement = previewWrapper.cloneNode(true) as HTMLElement;
+      printableElement.classList.add("pdf-render-root");
+
+      // Ensure the clone expands to full content height (no scrolling containers)
+      const forceAutoLayout = (el: HTMLElement) => {
+        el.classList.remove("h-full", "overflow-auto", "overflow-y-auto", "overflow-x-auto");
+        el.style.height = "auto";
+        el.style.maxHeight = "none";
+        el.style.overflow = "visible";
+      };
+
+      forceAutoLayout(printableElement);
+      printableElement.querySelectorAll<HTMLElement>(".h-full").forEach(forceAutoLayout);
+      printableElement
+        .querySelectorAll<HTMLElement>(".overflow-auto, .overflow-y-auto, .overflow-x-auto")
+        .forEach(forceAutoLayout);
+
+      // Page-break CSS (scoped to the cloned element only)
+      const pdfStyle = document.createElement("style");
+      pdfStyle.dataset.pdfStyle = "true";
+      pdfStyle.textContent = `
+        .pdf-render-root * {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
-        h1, h2, h3, h4, h5, h6 {
+        .pdf-render-root h1, .pdf-render-root h2, .pdf-render-root h3, .pdf-render-root h4, .pdf-render-root h5, .pdf-render-root h6 {
           page-break-after: avoid !important;
           break-after: avoid !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
-        p, li, blockquote {
+        .pdf-render-root p, .pdf-render-root li, .pdf-render-root blockquote {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
           orphans: 3;
           widows: 3;
         }
-        table, pre, code, img {
+        .pdf-render-root table, .pdf-render-root pre, .pdf-render-root code, .pdf-render-root img {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
-        tr {
+        .pdf-render-root tr {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
-        thead {
+        .pdf-render-root thead {
           display: table-header-group;
         }
-        .prose > * {
+        .pdf-render-root .prose > * {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
           margin-bottom: 0.75rem !important;
         }
-        .prose h1, .prose h2, .prose h3 {
+        .pdf-render-root .prose h1, .pdf-render-root .prose h2, .pdf-render-root .prose h3 {
           margin-top: 1rem !important;
           padding-top: 0.5rem !important;
         }
       `;
-      clonedElement.insertBefore(style, clonedElement.firstChild);
+      document.head.appendChild(pdfStyle);
 
       // Temporarily add to DOM for rendering
-      clonedElement.style.position = "absolute";
-      clonedElement.style.left = "-9999px";
-      clonedElement.style.width = `${format[0] - 20}mm`;
-      document.body.appendChild(clonedElement);
+      printableElement.style.position = "absolute";
+      printableElement.style.left = "-9999px";
+      printableElement.style.top = "0";
+      printableElement.style.width = `${format[0] - 20}mm`;
+      document.body.appendChild(printableElement);
 
       const options = {
         margin: [15, 15, 15, 15] as [number, number, number, number],
         filename: `${settings.filename}.pdf`,
         image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
+        html2canvas: {
+          scale: 2,
           useCORS: true,
           letterRendering: true,
           logging: false,
         },
-        jsPDF: { 
-          unit: "mm" as const, 
+        jsPDF: {
+          unit: "mm" as const,
           format: format,
           orientation: settings.orientation as "portrait" | "landscape",
           compress: true,
         },
-        pagebreak: { 
+        pagebreak: {
           mode: ["avoid-all", "css", "legacy"],
           before: ".page-break-before",
           after: ".page-break-after",
@@ -287,11 +306,12 @@ ${previewElement.innerHTML}
         },
       };
 
-      await html2pdf().set(options).from(clonedElement).save();
-      
-      // Clean up
-      document.body.removeChild(clonedElement);
-      
+      try {
+        await html2pdf().set(options).from(printableElement).save();
+      } finally {
+        printableElement.remove();
+        pdfStyle.remove();
+      }
       toast.dismiss();
       toast.success("PDF generated successfully!");
     } catch (err) {
