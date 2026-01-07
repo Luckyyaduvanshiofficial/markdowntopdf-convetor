@@ -1,3 +1,6 @@
+# robots.txt for MarkdownToPDF Converter
+# https://markdowntopdf-convetor.lovable.app/
+
 User-agent: Googlebot
 Allow: /
 
@@ -12,3 +15,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Sitemap location
+Sitemap: https://markdowntopdf-convetor.lovable.app/sitemap.xml
+
+# Crawl delay (optional, be polite to crawlers)
+Crawl-delay: 1
