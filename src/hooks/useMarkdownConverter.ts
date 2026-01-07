@@ -212,19 +212,86 @@ ${previewElement.innerHTML}
       const [width, height] = pageSizes[settings.pageSize] || pageSizes.a4;
       const format: [number, number] = settings.orientation === "landscape" ? [height, width] : [width, height];
 
+      // Create a clone of the preview element for PDF generation with proper page break styles
+      const clonedElement = previewElement.cloneNode(true) as HTMLElement;
+      
+      // Add CSS to handle page breaks properly
+      const style = document.createElement("style");
+      style.textContent = `
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        p, li, blockquote {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          orphans: 3;
+          widows: 3;
+        }
+        table, pre, code, img {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        tr {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        thead {
+          display: table-header-group;
+        }
+        .prose > * {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          margin-bottom: 0.75rem !important;
+        }
+        .prose h1, .prose h2, .prose h3 {
+          margin-top: 1rem !important;
+          padding-top: 0.5rem !important;
+        }
+      `;
+      clonedElement.insertBefore(style, clonedElement.firstChild);
+
+      // Temporarily add to DOM for rendering
+      clonedElement.style.position = "absolute";
+      clonedElement.style.left = "-9999px";
+      clonedElement.style.width = `${format[0] - 20}mm`;
+      document.body.appendChild(clonedElement);
+
       const options = {
-        margin: 10,
+        margin: [15, 15, 15, 15] as [number, number, number, number],
         filename: `${settings.filename}.pdf`,
         image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+        },
         jsPDF: { 
           unit: "mm" as const, 
           format: format,
-          orientation: settings.orientation as "portrait" | "landscape"
+          orientation: settings.orientation as "portrait" | "landscape",
+          compress: true,
+        },
+        pagebreak: { 
+          mode: ["avoid-all", "css", "legacy"],
+          before: ".page-break-before",
+          after: ".page-break-after",
+          avoid: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "tr", "table", "pre", "blockquote", "img"],
         },
       };
 
-      await html2pdf().set(options).from(previewElement).save();
+      await html2pdf().set(options).from(clonedElement).save();
+      
+      // Clean up
+      document.body.removeChild(clonedElement);
+      
       toast.dismiss();
       toast.success("PDF generated successfully!");
     } catch (err) {
