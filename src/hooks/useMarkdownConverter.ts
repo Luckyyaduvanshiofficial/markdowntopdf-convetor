@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { exampleMarkdown } from "@/lib/exampleMarkdown";
 
@@ -11,16 +11,48 @@ interface ConverterSettings {
   showGutter: boolean;
 }
 
+const STORAGE_KEY = "markdown-converter-content";
+const SETTINGS_KEY = "markdown-converter-settings";
+
 export const useMarkdownConverter = () => {
-  const [markdown, setMarkdown] = useState("");
-  const [settings, setSettings] = useState<ConverterSettings>({
-    filename: "document",
-    orientation: "portrait",
-    pageSize: "a4",
-    theme: "professional",
-    showLineNumbers: true,
-    showGutter: false,
+  const [markdown, setMarkdown] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved || "";
   });
+  
+  const [settings, setSettings] = useState<ConverterSettings>(() => {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // Fall through to default
+      }
+    }
+    return {
+      filename: "document",
+      orientation: "portrait",
+      pageSize: "a4",
+      theme: "professional",
+      showLineNumbers: true,
+      showGutter: false,
+    };
+  });
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Autosave markdown content
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, markdown);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [markdown]);
+
+  // Autosave settings
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   const updateSetting = useCallback(<K extends keyof ConverterSettings>(
     key: K,
@@ -36,6 +68,7 @@ export const useMarkdownConverter = () => {
 
   const clearContent = useCallback(() => {
     setMarkdown("");
+    localStorage.removeItem(STORAGE_KEY);
     toast.success("Content cleared");
   }, []);
 
@@ -47,6 +80,59 @@ export const useMarkdownConverter = () => {
       toast.error("Failed to copy to clipboard");
     }
   }, [markdown]);
+
+  const pasteFromClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setMarkdown(prev => prev + text);
+      toast.success("Pasted from clipboard!");
+    } catch (err) {
+      toast.error("Failed to paste from clipboard. Please allow clipboard access.");
+    }
+  }, []);
+
+  const importFile = useCallback(() => {
+    if (!fileInputRef.current) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".md,.txt,.markdown";
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const content = event.target?.result as string;
+            setMarkdown(content);
+            updateSetting("filename", file.name.replace(/\.(md|txt|markdown)$/, ""));
+            toast.success(`Imported "${file.name}"`);
+          };
+          reader.readAsText(file);
+        }
+      };
+      fileInputRef.current = input;
+    }
+    fileInputRef.current.click();
+  }, [updateSetting]);
+
+  const insertImage = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64 = event.target?.result as string;
+          const imageMarkdown = `\n![${file.name}](${base64})\n`;
+          setMarkdown(prev => prev + imageMarkdown);
+          toast.success(`Image "${file.name}" inserted!`);
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  }, []);
 
   const exportMarkdown = useCallback(() => {
     const blob = new Blob([markdown], { type: "text/markdown" });
@@ -80,6 +166,7 @@ export const useMarkdownConverter = () => {
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
     blockquote { border-left: 4px solid #ddd; margin-left: 0; padding-left: 1rem; color: #666; }
+    img { max-width: 100%; height: auto; }
   </style>
 </head>
 <body>
@@ -155,6 +242,9 @@ ${previewElement.innerHTML}
     loadExample,
     clearContent,
     copyToClipboard,
+    pasteFromClipboard,
+    importFile,
+    insertImage,
     exportMarkdown,
     exportHTML,
     generatePDF,

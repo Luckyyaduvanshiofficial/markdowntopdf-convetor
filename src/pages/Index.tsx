@@ -15,6 +15,9 @@ const Index = () => {
     loadExample,
     clearContent,
     copyToClipboard,
+    pasteFromClipboard,
+    importFile,
+    insertImage,
     exportMarkdown,
     exportHTML,
     generatePDF,
@@ -64,6 +67,9 @@ const Index = () => {
           onClear={clearContent}
           onExportHTML={exportHTML}
           onExportMarkdown={exportMarkdown}
+          onPaste={pasteFromClipboard}
+          onImportFile={importFile}
+          onInsertImage={insertImage}
         />
 
         {/* Editor and Preview */}
