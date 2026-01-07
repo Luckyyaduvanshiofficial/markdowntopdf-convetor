@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import MarkdownPreview from "@/components/MarkdownPreview";
 import ControlPanel from "@/components/ControlPanel";
+import DocumentStats from "@/components/DocumentStats";
 import { useMarkdownConverter } from "@/hooks/useMarkdownConverter";
 
 const Index = () => {
@@ -87,6 +88,9 @@ const Index = () => {
                 showLineNumbers={settings.showLineNumbers}
                 showGutter={settings.showGutter}
               />
+              <div className="mt-2">
+                <DocumentStats content={markdown} />
+              </div>
             </div>
           </div>
 
