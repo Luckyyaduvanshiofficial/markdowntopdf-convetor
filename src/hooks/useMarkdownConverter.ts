@@ -212,106 +212,19 @@ ${previewElement.innerHTML}
       const [width, height] = pageSizes[settings.pageSize] || pageSizes.a4;
       const format: [number, number] = settings.orientation === "landscape" ? [height, width] : [width, height];
 
-      // Build a printable clone of the *preview wrapper* (not the flex container),
-      // otherwise `h-full` can collapse to 0 height and produce a blank PDF.
-      const previewWrapper = (previewElement.firstElementChild as HTMLElement | null) ?? previewElement;
-      const printableElement = previewWrapper.cloneNode(true) as HTMLElement;
-      printableElement.classList.add("pdf-render-root");
-
-      // Ensure the clone expands to full content height (no scrolling containers)
-      const forceAutoLayout = (el: HTMLElement) => {
-        el.classList.remove("h-full", "overflow-auto", "overflow-y-auto", "overflow-x-auto");
-        el.style.height = "auto";
-        el.style.maxHeight = "none";
-        el.style.overflow = "visible";
-      };
-
-      forceAutoLayout(printableElement);
-      printableElement.querySelectorAll<HTMLElement>(".h-full").forEach(forceAutoLayout);
-      printableElement
-        .querySelectorAll<HTMLElement>(".overflow-auto, .overflow-y-auto, .overflow-x-auto")
-        .forEach(forceAutoLayout);
-
-      // Page-break CSS (scoped to the cloned element only)
-      const pdfStyle = document.createElement("style");
-      pdfStyle.dataset.pdfStyle = "true";
-      pdfStyle.textContent = `
-        .pdf-render-root * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        .pdf-render-root h1, .pdf-render-root h2, .pdf-render-root h3, .pdf-render-root h4, .pdf-render-root h5, .pdf-render-root h6 {
-          page-break-after: avoid !important;
-          break-after: avoid !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-        }
-        .pdf-render-root p, .pdf-render-root li, .pdf-render-root blockquote {
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          orphans: 3;
-          widows: 3;
-        }
-        .pdf-render-root table, .pdf-render-root pre, .pdf-render-root code, .pdf-render-root img {
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-        }
-        .pdf-render-root tr {
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-        }
-        .pdf-render-root thead {
-          display: table-header-group;
-        }
-        .pdf-render-root .prose > * {
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          margin-bottom: 0.75rem !important;
-        }
-        .pdf-render-root .prose h1, .pdf-render-root .prose h2, .pdf-render-root .prose h3 {
-          margin-top: 1rem !important;
-          padding-top: 0.5rem !important;
-        }
-      `;
-      document.head.appendChild(pdfStyle);
-
-      // Temporarily add to DOM for rendering
-      printableElement.style.position = "absolute";
-      printableElement.style.left = "-9999px";
-      printableElement.style.top = "0";
-      printableElement.style.width = `${format[0] - 20}mm`;
-      document.body.appendChild(printableElement);
-
       const options = {
-        margin: [15, 15, 15, 15] as [number, number, number, number],
+        margin: 10,
         filename: `${settings.filename}.pdf`,
         image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          logging: false,
-        },
-        jsPDF: {
-          unit: "mm" as const,
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { 
+          unit: "mm" as const, 
           format: format,
-          orientation: settings.orientation as "portrait" | "landscape",
-          compress: true,
-        },
-        pagebreak: {
-          mode: ["avoid-all", "css", "legacy"],
-          before: ".page-break-before",
-          after: ".page-break-after",
-          avoid: ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "tr", "table", "pre", "blockquote", "img"],
+          orientation: settings.orientation as "portrait" | "landscape"
         },
       };
 
-      try {
-        await html2pdf().set(options).from(printableElement).save();
-      } finally {
-        printableElement.remove();
-        pdfStyle.remove();
-      }
+      await html2pdf().set(options).from(previewElement).save();
       toast.dismiss();
       toast.success("PDF generated successfully!");
     } catch (err) {
